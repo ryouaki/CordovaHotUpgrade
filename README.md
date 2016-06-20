@@ -60,7 +60,7 @@
   - 下载服务 ：向客户端提供下载package功能。package是一个zip文件，包含更新的文件。
 
 ## 客户端plugin设计
-- 客户端主要使用Cordova的Plugin的方式。我们需要定义一个JS-Module的API来统一接口__hotUpgradePlugin.check__，通过这个API我们将服务器端设置的版本信息以及变更文件列表传入Plugin的原生代码。
+- 客户端主要使用Cordova的Plugin的方式。我们需要定义一个JS-Module的API来统一接口__hotUpgradePlugin.check__，通过这个API我们将服务器端设置的版本信息以及变更文件列表传入Plugin的原生代码，为了让我们的App有更好的用户体验，我们需要加一个Loading窗口，来告诉用户，我们在后台干坏事呢。
 ```js
   $.ajax({
     url:'http://localhost:3000/api/getCurrentVersion',
@@ -68,10 +68,29 @@
     success:function(result){
       hotUpgradePlugin.check(result);
     },error:function(error){
-      console.log(error);
+      hotUpgradePlugin.check('');
     }
   });
 ```
 
-- Plugin原生代码实现，很遗憾，我们无法修改打包后的www的内容。而且Cordova的核心会主动加载打包后的www目录的内容(android:assets,iOS:/www)。为了能够使用我们自己修改后的代码，我们需要在我们的Plugin中实现这些东西：
-  - 由于我们的热更新插件在App启动后第一个运行，所以我们需要做的第一件事就是检查App的内部存储目录是否存在www目录，如果没有，那么就从package/www目录将所有内容拷贝到
+- Plugin原生代码实现。很遗憾，我们无法修改打包后的www的内容。而且Cordova的核心会主动加载打包后的www目录的内容(android:assets,iOS:/www)。为了能够使用我们自己修改后的代码，我们需要在我们的Plugin中实现这些东西：
+  - 由于我们的热更新插件在App启动后第一个运行，所以我们需要做的第一件事就是检查App的内部存储目录是否存在www目录，如果没有，那么就从package/www目录将所有内容拷贝到App的内部存储的根目录。
+  - 判断JS端传入的参数
+    - 如果为空，说明连接服务器失败，此时加载预先拷贝到App内部存储根目录的www/index2.html（使用该插件以后，www/index.html是入口文件，但是www/index2.html才是App的首页。需要由Plugin引导）。
+    ```Java
+    this.cordova.getThreadPool().execute(new Runnable() {
+      @Override
+      public void run() {
+        webView.loadUrl("file://"+cordova.getActivity().getFilesDir().getPath()+"/www/index2.html");
+      }
+    });
+    ```
+    *注意，这个处理必须放在线程里面进行，否则会被系统杀死。*
+    - 如果传入的参数包含更新信息，和本地的版本信息进行对比，为了能够记录当前App内使用的版本号。我们需要在程序中添加一个version.json文件来记录App的版本信息。如果服务器端版本信息比App内部的新，那么下载服务器端的zip文件，到App内部存储根目录。
+    ```js
+    {
+      'version':'1.0.0'
+    }
+    ```
+    - 根据服务器端取得的文件变更列表，从解压出来的文件夹内替换掉App内部存储的www目录对应的文件。
+    - 使用webView.loadUrl()加载/www/index2.html启动App。
