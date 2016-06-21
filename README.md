@@ -58,6 +58,7 @@
   }
   ```
   - 下载服务 ：向客户端提供下载package功能。package是一个zip文件，包含更新的文件。
+  __*注意这里，如果是替换更新的话，我们需要打包完整www目录。确保cordova相关的js库在App内能取到。*__
 
 ## 客户端plugin设计
 - 客户端主要使用Cordova的Plugin的方式。我们需要定义一个JS-Module的API来统一接口__hotUpgradePlugin.check__，通过这个API我们将服务器端设置的版本信息以及变更文件列表传入Plugin的原生代码，为了让我们的App有更好的用户体验，我们需要加一个Loading窗口，来告诉用户，我们在后台干坏事呢。
